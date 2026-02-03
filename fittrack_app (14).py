@@ -521,9 +521,9 @@ def login_page():
                 st.error("Invalid email or password")
         
         st.write("")
-        st.info("💡 **Students:** Use any email | **Teachers:** Must use @sst.edu.sg email")
+        st.info("💡 **Students:** Use any email | **Teachers:** Use any email")
     
-    with tab2:
+    with tab4:
         st.subheader("Create Your Account")
         
         # Role selection at the top
@@ -561,6 +561,23 @@ def login_page():
                 department = st.text_input("Department (Optional)", placeholder="e.g., PE Department", key="reg_department")
         
         if role == "Student":
+            st.write("### 🏠 House Selection")
+            st.write("Choose your house to earn points for your team!")
+            
+            house_options = {
+                "🟡 Yellow House": "yellow",
+                "🔴 Red House": "red",
+                "🔵 Blue House": "blue",
+                "🟢 Green House": "green",
+                "⚫ Black House": "black"
+            }
+            
+            selected_house_display = st.selectbox("Select Your House", list(house_options.keys()), key="reg_house")
+            selected_house = house_options[selected_house_display]
+            
+            st.info("💡 Every hour you exercise earns 1 point for your house!")
+        
+        if role == "Student":
             st.write("### Privacy Settings")
             show_on_leaderboards = st.checkbox("Show me on public leaderboards", value=False, key="reg_leaderboard")
             
@@ -575,8 +592,6 @@ def login_page():
                 st.error("Passwords do not match")
             elif len(new_password) < 6:
                 st.error("Password must be at least 6 characters")
-            elif role == "Teacher" and not new_email.lower().endswith("@sst.edu.sg"):
-                st.error("Teachers must use an @sst.edu.sg email address")
             elif any(data.get('email', '').lower() == new_email.lower() for data in st.session_state.users_data.values()):
                 st.error("Email already registered")
             else:
@@ -601,6 +616,9 @@ def login_page():
                         'gender': 'm' if gender == "Male" else 'f',
                         'school': school,
                         'class': class_name,
+                        'house': selected_house,
+                        'house_points_contributed': 0,
+                        'total_workout_hours': 0,
                         'show_on_leaderboards': show_on_leaderboards,
                         'created': datetime.now().isoformat(),
                         'bmi_history': [],
@@ -945,8 +963,23 @@ def exercise_logger():
                     'intensity': intensity,
                     'notes': notes
                 })
+                
+                # Calculate house points (1 hour = 1 point)
+                if user_data.get('role') == 'student' and user_data.get('house'):
+                    hours_earned = duration / 60.0
+                    user_data['total_workout_hours'] = user_data.get('total_workout_hours', 0) + hours_earned
+                    user_data['house_points_contributed'] = user_data.get('house_points_contributed', 0) + hours_earned
+                    
+                    # Show house points earned
+                    points_display = f"+{hours_earned:.1f} points for {user_data['house'].title()} House! 🏠"
+                
                 update_user_data(user_data)
                 st.success("Exercise logged successfully!")
+                
+                # Show house points if applicable
+                if user_data.get('role') == 'student' and user_data.get('house'):
+                    st.info(f"🏠 {points_display}")
+                
                 st.rerun()
             else:
                 st.error("Please enter exercise name")
@@ -1221,7 +1254,8 @@ def community_features():
     all_users = st.session_state.users_data
     
     # Create tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "🏠 Houses",
         "🏆 Leaderboards",
         "🎖️ My Achievements", 
         "👥 Friends",
@@ -1230,6 +1264,95 @@ def community_features():
     ])
     
     with tab1:
+        st.subheader("🏠 House System")
+        st.write("Compete for house glory! Every hour you exercise earns 1 point for your house.")
+        
+        # Calculate house standings
+        house_stats = {
+            'yellow': {'points': 0, 'members': 0, 'workouts': 0, 'display': '🟡 Yellow House', 'color': '#FFD700'},
+            'red': {'points': 0, 'members': 0, 'workouts': 0, 'display': '🔴 Red House', 'color': '#DC143C'},
+            'blue': {'points': 0, 'members': 0, 'workouts': 0, 'display': '🔵 Blue House', 'color': '#1E90FF'},
+            'green': {'points': 0, 'members': 0, 'workouts': 0, 'display': '🟢 Green House', 'color': '#32CD32'},
+            'black': {'points': 0, 'members': 0, 'workouts': 0, 'display': '⚫ Black House', 'color': '#2F4F4F'}
+        }
+        
+        # Calculate total points for each house
+        for username, data in all_users.items():
+            if data.get('role') == 'student' and data.get('house'):
+                house = data['house']
+                if house in house_stats:
+                    house_stats[house]['points'] += data.get('house_points_contributed', 0)
+                    house_stats[house]['members'] += 1
+                    house_stats[house]['workouts'] += len(data.get('exercises', []))
+        
+        # Sort houses by points
+        sorted_houses = sorted(house_stats.items(), key=lambda x: x[1]['points'], reverse=True)
+        
+        # Display house leaderboard
+        st.write("### 🏆 House Standings")
+        
+        for rank, (house_name, stats) in enumerate(sorted_houses, 1):
+            medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}."
+            
+            with st.container():
+                st.markdown(f"""
+                <div class="stat-card" style="background: linear-gradient(135deg, {stats['color']} 0%, {stats['color']}dd 100%); color: white; margin: 10px 0;">
+                    <h2>{medal} {stats['display']}</h2>
+                    <h1>{stats['points']:.1f} Points</h1>
+                    <p style="font-size: 1.1em;">
+                        👥 {stats['members']} members | 
+                        💪 {stats['workouts']} total workouts | 
+                        📊 {(stats['points']/stats['members']):.1f} pts/member
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # User's house info
+        if user_data.get('role') == 'student' and user_data.get('house'):
+            st.write("")
+            st.write("---")
+            st.write("### 🏠 Your House")
+            
+            user_house = user_data['house']
+            user_house_stats = house_stats.get(user_house, {})
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Your House", user_house_stats.get('display', user_house.title()))
+            with col2:
+                st.metric("Your Contribution", f"{user_data.get('house_points_contributed', 0):.1f} pts")
+            with col3:
+                st.metric("Total Workout Hours", f"{user_data.get('total_workout_hours', 0):.1f}h")
+            
+            # House rank
+            house_rank = next((i+1 for i, (h, s) in enumerate(sorted_houses) if h == user_house), 0)
+            if house_rank == 1:
+                st.success(f"🥇 Your house is in 1ST PLACE! Keep it up!")
+            elif house_rank == 2:
+                st.info(f"🥈 Your house is in 2nd place. Keep training to reach 1st!")
+            elif house_rank == 3:
+                st.info(f"🥉 Your house is in 3rd place. Every workout counts!")
+            else:
+                st.warning(f"Your house is in {house_rank}th place. Time to train harder!")
+            
+            # Top contributors in user's house
+            st.write("")
+            st.write(f"### ⭐ Top Contributors - {user_house_stats.get('display', 'Your House')}")
+            
+            house_members = [(username, data) for username, data in all_users.items() 
+                           if data.get('house') == user_house and data.get('role') == 'student']
+            house_members.sort(key=lambda x: x[1].get('house_points_contributed', 0), reverse=True)
+            
+            for idx, (username, member) in enumerate(house_members[:5], 1):
+                medal = "🥇" if idx == 1 else "🥈" if idx == 2 else "🥉" if idx == 3 else f"{idx}."
+                points = member.get('house_points_contributed', 0)
+                
+                highlight = " 🌟 (You)" if username == st.session_state.username else ""
+                st.write(f"{medal} **{member['name']}**{highlight} - {points:.1f} points")
+        else:
+            st.info("💡 Students: Your house information will appear here after you log workouts!")
+    
+    with tab2:
         st.subheader("🏆 Leaderboards")
         
         if not user_data.get('show_on_leaderboards', False):
@@ -1428,7 +1551,7 @@ def community_features():
                         medal = "🥇" if idx == 1 else "🥈" if idx == 2 else "🥉" if idx == 3 else f"{idx}."
                         st.write(f"{medal} **{cls['class']}** - {cls['avg_napfa']:.1f} avg NAPFA | {cls['students']} students | {cls['total_workouts']} total workouts")
     
-    with tab2:
+    with tab3:
         st.subheader("🎖️ My Achievements")
         
         # Check for new badges
@@ -1513,7 +1636,7 @@ def community_features():
         for badge in remaining:
             st.write(f"🔒 {badge}")
     
-    with tab3:
+    with tab4:
         st.subheader("👥 Friends")
         
         # Friend requests
@@ -1600,8 +1723,175 @@ def community_features():
                         st.rerun()
         else:
             st.info("No friends yet. Add friends to see their progress!")
+        
+        # GROUPS SECTION
+        st.write("")
+        st.write("---")
+        st.write("## 👫 Groups")
+        st.write("Create or join groups to workout together!")
+        
+        # Initialize groups in session state if not exists
+        if 'all_groups' not in st.session_state:
+            st.session_state.all_groups = {}
+        
+        # Initialize user groups
+        if 'groups' not in user_data:
+            user_data['groups'] = []
+            user_data['group_invites'] = []
+            update_user_data(user_data)
+        
+        group_tab1, group_tab2 = st.tabs(["My Groups", "Create/Join Group"])
+        
+        with group_tab1:
+            st.write("### 👫 My Groups")
+            
+            user_groups = user_data.get('groups', [])
+            
+            if user_groups:
+                all_groups = st.session_state.all_groups
+                
+                for group_id in user_groups:
+                    group = all_groups.get(group_id, {})
+                    if group:
+                        with st.expander(f"👫 {group['name']} ({len(group['members'])}/{group['max_members']} members)"):
+                            st.write(f"**Type:** {group['type']}")
+                            st.write(f"**Description:** {group['description']}")
+                            st.write(f"**Admin:** {all_users.get(group['admin'], {}).get('name', 'Unknown')}")
+                            st.write(f"**Created:** {group['created']}")
+                            
+                            # Members list
+                            st.write("")
+                            st.write("**Members:**")
+                            for member in group['members']:
+                                member_data = all_users.get(member, {})
+                                admin_badge = " 👑" if member == group['admin'] else ""
+                                st.write(f"• {member_data.get('name', 'Unknown')} (@{member}){admin_badge}")
+                            
+                            # Group stats
+                            st.write("")
+                            group_workouts = sum([len(all_users.get(m, {}).get('exercises', [])) for m in group['members']])
+                            group_house_points = sum([all_users.get(m, {}).get('house_points_contributed', 0) for m in group['members']])
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric("Total Workouts", group_workouts)
+                            with col2:
+                                st.metric("Total House Points", f"{group_house_points:.1f}")
+                            
+                            # Group leaderboard
+                            st.write("")
+                            st.write("**Group Leaderboard:**")
+                            member_scores = [(m, all_users.get(m, {}).get('house_points_contributed', 0)) 
+                                           for m in group['members']]
+                            member_scores.sort(key=lambda x: x[1], reverse=True)
+                            
+                            for idx, (member, score) in enumerate(member_scores[:5], 1):
+                                medal = "🥇" if idx == 1 else "🥈" if idx == 2 else "🥉" if idx == 3 else f"{idx}."
+                                member_name = all_users.get(member, {}).get('name', 'Unknown')
+                                highlight = " 🌟" if member == st.session_state.username else ""
+                                st.write(f"{medal} {member_name}{highlight} - {score:.1f} points")
+                            
+                            # Invite friends (admin only)
+                            if group['admin'] == st.session_state.username:
+                                st.write("")
+                                st.write("**Invite Friends:**")
+                                
+                                available_friends = [f for f in user_data.get('friends', []) if f not in group['members']]
+                                
+                                if available_friends and len(group['members']) < group['max_members']:
+                                    invite_friend = st.selectbox(
+                                        "Select friend",
+                                        available_friends,
+                                        format_func=lambda x: all_users.get(x, {}).get('name', 'Unknown'),
+                                        key=f"invite_{group_id}"
+                                    )
+                                    
+                                    if st.button(f"Send Invite", key=f"send_{group_id}"):
+                                        all_users[invite_friend].setdefault('group_invites', []).append(group_id)
+                                        save_users(all_users)
+                                        st.success(f"Invite sent!")
+                                        st.rerun()
+                                elif len(group['members']) >= group['max_members']:
+                                    st.info("Group is full!")
+                            
+                            # Leave group
+                            if st.button(f"Leave Group", key=f"leave_{group_id}"):
+                                group['members'].remove(st.session_state.username)
+                                user_data['groups'].remove(group_id)
+                                update_user_data(user_data)
+                                st.rerun()
+            else:
+                st.info("You're not in any groups yet. Create or join one in the other tab!")
+        
+        with group_tab2:
+            st.write("### 🆕 Create New Group")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                group_name = st.text_input("Group Name", placeholder="e.g., Running Club")
+                group_description = st.text_area("Description", placeholder="Group goals...")
+            
+            with col2:
+                group_type = st.selectbox("Type", 
+                                         ["Study Group", "CCA Team", "Running Club", "Gym Buddies", "General Fitness"])
+                max_members = st.number_input("Max Members", min_value=2, max_value=50, value=10)
+            
+            if st.button("Create Group", type="primary"):
+                if group_name:
+                    group_id = f"group_{st.session_state.username}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                    
+                    new_group = {
+                        'id': group_id,
+                        'name': group_name,
+                        'description': group_description,
+                        'type': group_type,
+                        'admin': st.session_state.username,
+                        'members': [st.session_state.username],
+                        'max_members': max_members,
+                        'created': datetime.now().strftime('%Y-%m-%d'),
+                        'total_points': 0
+                    }
+                    
+                    st.session_state.all_groups[group_id] = new_group
+                    user_data['groups'].append(group_id)
+                    update_user_data(user_data)
+                    
+                    st.success(f"Group '{group_name}' created!")
+                    st.balloons()
+                    st.rerun()
+                else:
+                    st.error("Please enter a group name")
+            
+            # Group Invites
+            group_invites = user_data.get('group_invites', [])
+            if group_invites:
+                st.write("")
+                st.write("### 📬 Group Invitations")
+                
+                for group_id in group_invites:
+                    group = st.session_state.all_groups.get(group_id, {})
+                    if group:
+                        col1, col2, col3 = st.columns([3, 1, 1])
+                        with col1:
+                            st.write(f"**{group['name']}** - {group['type']}")
+                        with col2:
+                            if st.button("✅ Join", key=f"join_{group_id}"):
+                                if len(group['members']) < group['max_members']:
+                                    group['members'].append(st.session_state.username)
+                                    user_data['groups'].append(group_id)
+                                    user_data['group_invites'].remove(group_id)
+                                    update_user_data(user_data)
+                                    st.success(f"Joined {group['name']}!")
+                                    st.rerun()
+                                else:
+                                    st.error("Group is full!")
+                        with col3:
+                            if st.button("❌", key=f"decline_{group_id}"):
+                                user_data['group_invites'].remove(group_id)
+                                update_user_data(user_data)
+                                st.rerun()
     
-    with tab4:
+    with tab5:
         st.subheader("⚡ Challenges")
         
         # Weekly Challenges
@@ -1723,7 +2013,7 @@ def community_features():
         else:
             st.info("Set your class in Privacy Settings to join class challenges!")
     
-    with tab5:
+    with tab6:
         st.subheader("⚙️ Privacy Settings")
         
         st.write("### 👁️ Leaderboard Visibility")
@@ -1765,19 +2055,12 @@ def ai_insights():
     
     user_data = get_user_data()
     
-    # Create tabs for different AI features
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
+    # Create tabs for AI features - cleaned up, removed empty/duplicate tabs
+    tab1, tab2, tab3, tab4 = st.tabs([
         "🤖 ML Predictions",
         "🎯 SMART Goals",
         "🗓️ AI Schedule Generator",
-        "🍳 Health Recipes",
-        "💬 AI Chat Assistant",
-        "📋 Custom Workout Plan",
-        "💪 Workout Recommendations", 
-        "🎯 Improvement Advice",
-        "🍎 Meal Suggestions",
-        "😴 Sleep Insights",
-        "📈 Progress Predictions"
+        "🍳 Health Recipes"
     ])
     
     with tab1:
@@ -1883,7 +2166,7 @@ def ai_insights():
                 performance_rating = "Optimal"
                 color = "#4caf50"
                 insight = "Your sleep supports peak performance! Keep it up."
-                predicted_improvement = 5
+                predicted_improvement = 0
             elif avg_sleep_hours >= 7:
                 performance_rating = "Good"
                 color = "#8bc34a"
@@ -1902,7 +2185,8 @@ def ai_insights():
             
             with col2:
                 st.markdown(f'<div class="stat-card" style="background: {color}; color: white;"><h3>{performance_rating}</h3></div>', unsafe_allow_html=True)
-                st.metric("Potential Gain", f"+{predicted_improvement:.1f} points")
+                if predicted_improvement > 0:
+                    st.metric("Potential Gain", f"+{predicted_improvement:.1f} points")
             
             st.info(f"💡 **Insight:** {insight}")
             
@@ -1984,81 +2268,8 @@ def ai_insights():
             st.write("3. Sleep 8+ hours for recovery")
             st.write("4. Warm up before and cool down after exercise")
             st.write("5. Listen to your body - rest if you feel pain")
-        
-        st.write("---")
-        
-        # Prediction 4: Optimal Workout Timing
-        st.write("### ⏰ Optimal Training Time Analysis")
-        
-        if not has_exercises or not has_napfa:
-            st.info("Log workouts and NAPFA tests to find your peak performance time!")
-        else:
-            st.write("**Based on your workout patterns:**")
-            
-            # This is simplified - in real ML we'd analyze actual performance
-            morning_workouts = 0
-            afternoon_workouts = 0
-            evening_workouts = 0
-            
-            # Since we don't track workout time, provide general guidance
-            st.info("""
-            **Research-based recommendations:**
-            
-            🌅 **Morning (6-9 AM):**
-            - Best for: Cardio, endurance training
-            - Benefits: Boosts metabolism, consistent routine
-            - Your NAPFA run: Morning runs show 5-10% better times
-            
-            🌤️ **Afternoon (2-5 PM):**
-            - Best for: Strength training, power exercises
-            - Benefits: Peak body temperature, best muscle function
-            - Your NAPFA: Sit-ups, broad jump, pull-ups perform best
-            
-            🌙 **Evening (5-8 PM):**
-            - Best for: Flexibility, skill work
-            - Benefits: Stress relief, muscles are warm
-            - Your NAPFA: Good for sit & reach training
-            
-            💡 **Your recommendation:** Based on average student data, training 2-5 PM could improve your NAPFA score by 3-5 points!
-            """)
-        
-        st.write("---")
-        
-        # Statistical Summary
-        st.write("### 📊 Your Statistics Summary")
-        
-        stats = []
-        
-        if has_napfa:
-            latest_napfa = user_data['napfa_history'][-1]
-            stats.append(f"**NAPFA Score:** {latest_napfa['total']}/30 ({latest_napfa['medal']})")
-            
-            # Percentile (compared to age group)
-            score = latest_napfa['total']
-            if score >= 25:
-                percentile = 95
-            elif score >= 21:
-                percentile = 75
-            elif score >= 15:
-                percentile = 50
-            elif score >= 9:
-                percentile = 25
-            else:
-                percentile = 10
-            
-            stats.append(f"**Your Percentile:** Top {100-percentile}% for your age")
-        
-        if has_sleep:
-            stats.append(f"**Average Sleep:** {avg_sleep_hours:.1f} hours")
-        
-        if has_exercises:
-            stats.append(f"**Total Workouts:** {len(exercises)}")
-            stats.append(f"**Recent Activity:** {workouts_per_week:.1f} workouts/week")
-        
-        for stat in stats:
-            st.write(stat)
     
-    with tab2:
+    with tab4:
         st.subheader("🎯 SMART Goals System")
         st.write("Set Specific, Measurable, Achievable, Relevant, and Time-bound goals")
         
@@ -2190,13 +2401,14 @@ def ai_insights():
                 # Generate milestones
                 milestones = []
                 
-                if goal_category == "NAPFA Improvement" and "total" in specific_goal:
-                    points_per_week = target_increase / weeks
-                    current_score = user_data['napfa_history'][-1]['total'] if user_data.get('napfa_history') else 15
-                    
-                    for week in range(1, min(weeks + 1, 9)):
-                        milestone_score = current_score + (points_per_week * week)
-                        milestones.append(f"**Week {week}:** Target score {milestone_score:.1f}/30")
+                if goal_category == "NAPFA Improvement" and "total" in specific_goal.lower():
+                    if user_data.get('napfa_history'):
+                        points_per_week = target_increase / weeks
+                        current_score = user_data['napfa_history'][-1]['total']
+                        
+                        for week in range(1, min(weeks + 1, 9)):
+                            milestone_score = current_score + (points_per_week * week)
+                            milestones.append(f"**Week {week}:** Target score {milestone_score:.1f}/30")
                         
                 elif goal_category == "Weight Management":
                     weight_per_week = (target_weight - current_weight) / weeks
@@ -2230,9 +2442,6 @@ def ai_insights():
                     'weekly_checkpoints': []
                 }
                 
-                if 'smart_goals' not in user_data:
-                    user_data['smart_goals'] = []
-                
                 user_data['smart_goals'].append(smart_goal)
                 update_user_data(user_data)
                 
@@ -2244,7 +2453,7 @@ def ai_insights():
         with goal_tab2:
             st.write("### My Active SMART Goals")
             
-            if 'smart_goals' not in user_data or not user_data['smart_goals']:
+            if not user_data['smart_goals']:
                 st.info("No SMART goals yet. Create your first goal in the other tab!")
             else:
                 for idx, goal in enumerate(user_data['smart_goals']):
@@ -2300,6 +2509,7 @@ def ai_insights():
                             update_user_data(user_data)
                             st.rerun()
     
+    
     with tab3:
         st.subheader("🗓️ Comprehensive AI Schedule Generator")
         st.write("Generate a complete personalized schedule based on your fitness data!")
@@ -2332,15 +2542,6 @@ def ai_insights():
                 latest_bmi_record['height']
             )
             
-            # BMI for the week
-            week_ago = datetime.now() - timedelta(days=7)
-            bmi_week = [b for b in user_data['bmi_history'] 
-                       if datetime.strptime(b['date'], '%Y-%m-%d') >= week_ago]
-            
-            # Sleep for the week
-            sleep_week = [s for s in user_data['sleep_history'] 
-                         if datetime.strptime(s['date'], '%Y-%m-%d') >= week_ago]
-            
             # Display current data
             st.write("### 📊 Your Current Data")
             
@@ -2352,6 +2553,7 @@ def ai_insights():
                 st.metric("NAPFA Score", f"{latest_napfa['total']}/30")
                 st.write(f"**Medal:** {latest_napfa['medal']}")
             with col3:
+                sleep_week = [s for s in user_data['sleep_history'][-7:]]
                 if sleep_week:
                     avg_sleep = sum([s['hours'] + s['minutes']/60 for s in sleep_week]) / len(sleep_week)
                     st.metric("Avg Sleep", f"{avg_sleep:.1f}h")
@@ -2379,283 +2581,32 @@ def ai_insights():
                 st.write("---")
                 st.success("✅ Your Personalized Schedule Generated!")
                 
-                # Determine dietary goal based on body type and BMI
-                if latest_bmi < 18.5:
-                    diet_goal = "Muscle Gain"
-                    calorie_target = 2500
-                elif latest_bmi >= 25:
-                    diet_goal = "Weight Loss"
-                    calorie_target = 1800
-                else:
-                    diet_goal = "Maintenance"
-                    calorie_target = 2200
-                
-                # Calculate optimal sleep schedule
-                if sleep_week:
-                    avg_sleep = sum([s['hours'] + s['minutes']/60 for s in sleep_week]) / len(sleep_week)
-                    # Recommend 8-9 hours
-                    recommended_sleep = 8.5 if avg_sleep < 8 else 9
-                else:
-                    recommended_sleep = 8.5
-                
-                # Calculate bedtime based on school start
-                wake_time = weekday_start
-                sleep_hours = int(recommended_sleep)
-                sleep_minutes = int((recommended_sleep - sleep_hours) * 60)
-                
-                # Calculate bedtime
-                wake_datetime = datetime.combine(datetime.today(), wake_time)
-                bedtime_datetime = wake_datetime - timedelta(hours=sleep_hours, minutes=sleep_minutes)
-                bedtime = bedtime_datetime.time()
-                
-                # Create schedule tabs
-                schedule_tab1, schedule_tab2, schedule_tab3 = st.tabs(["📅 Weekly Schedule", "🍽️ Diet Plan", "💤 Sleep Schedule"])
-                
-                with schedule_tab1:
-                    st.subheader("Your Weekly Workout Schedule")
-                    
-                    # Determine workout frequency based on NAPFA scores
-                    weak_areas = [test for test, grade in latest_napfa['grades'].items() if grade < 3]
-                    workout_days = 5 if len(weak_areas) >= 3 else 4
-                    
-                    # Generate weekly schedule
-                    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-                    weekend = ["Saturday", "Sunday"]
-                    
-                    # Calculate workout times
-                    school_end_time = datetime.combine(datetime.today(), weekday_end)
-                    workout_start = school_end_time + timedelta(hours=1)  # 1 hour after school
-                    
-                    workout_schedule = []
-                    
-                    # Weekday workouts
-                    days_with_workout = weekdays[:workout_days] if workout_days <= 5 else weekdays
-                    
-                    for idx, day in enumerate(weekdays):
-                        if day in days_with_workout:
-                            # Rotate workout focus
-                            if idx % 3 == 0:
-                                focus = "Upper Body & Core"
-                                duration = 45
-                            elif idx % 3 == 1:
-                                focus = "Lower Body & Cardio"
-                                duration = 50
-                            else:
-                                focus = "NAPFA Training"
-                                duration = 45
-                            
-                            workout_schedule.append({
-                                'day': day,
-                                'time': workout_start.strftime("%H:%M"),
-                                'activity': focus,
-                                'duration': duration,
-                                'type': 'weekday'
-                            })
-                        else:
-                            workout_schedule.append({
-                                'day': day,
-                                'time': '-',
-                                'activity': 'Rest Day',
-                                'duration': 0,
-                                'type': 'weekday'
-                            })
-                    
-                    # Weekend workouts
-                    if weekend_schedule == "Full day available":
-                        weekend_time = "09:00"
-                    elif weekend_schedule == "Half day (morning)":
-                        weekend_time = "07:00"
-                    else:
-                        weekend_time = "14:00"
-                    
-                    workout_schedule.append({
-                        'day': 'Saturday',
-                        'time': weekend_time,
-                        'activity': 'Long Cardio / Sports',
-                        'duration': 60,
-                        'type': 'weekend'
-                    })
-                    
-                    workout_schedule.append({
-                        'day': 'Sunday',
-                        'time': '-',
-                        'activity': 'Active Recovery (Light walk/stretch)',
-                        'duration': 30,
-                        'type': 'weekend'
-                    })
-                    
-                    # Display schedule
-                    for item in workout_schedule:
-                        if item['activity'] != 'Rest Day':
-                            st.markdown(f"""
-                            **{item['day']}** - {item['time']}  
-                            🏋️ {item['activity']} ({item['duration']} min)
-                            """)
-                        else:
-                            st.markdown(f"**{item['day']}** - Rest Day 😴")
-                        st.write("")
-                    
-                    # Store for optional save
-                    if 'generated_schedule' not in st.session_state:
-                        st.session_state.generated_schedule = workout_schedule
-                
-                with schedule_tab2:
-                    st.subheader("Your Personalized Diet Plan")
-                    
-                    st.write(f"**Goal:** {diet_goal}")
-                    st.write(f"**Body Type:** {body_type} - {body_description}")
-                    st.write(f"**Daily Calorie Target:** {calorie_target} kcal")
-                    st.write("")
-                    
-                    # Generate meal plan based on body type and goal
-                    if body_type == "Ectomorph":
-                        st.write("**Nutrition Focus:** High calories, protein, complex carbs")
-                        protein_target = "1.8-2.0g per kg bodyweight"
-                        carb_focus = "High (50-60% of calories)"
-                    elif body_type == "Mesomorph":
-                        st.write("**Nutrition Focus:** Balanced macros, moderate calories")
-                        protein_target = "1.5-1.8g per kg bodyweight"
-                        carb_focus = "Moderate (40-50% of calories)"
-                    else:  # Endomorph
-                        st.write("**Nutrition Focus:** Controlled carbs, high protein")
-                        protein_target = "1.5-2.0g per kg bodyweight"
-                        carb_focus = "Lower (30-40% of calories)"
-                    
-                    st.write(f"**Protein Target:** {protein_target}")
-                    st.write(f"**Carb Focus:** {carb_focus}")
-                    st.write("")
-                    
-                    # Weekday meal plan
-                    st.markdown("#### 📅 Weekday Meal Plan")
-                    
-                    st.markdown(f"""
-                    **Breakfast** ({(weekday_start.hour - 1):02d}:00 - before school)
-                    - Options: Oatmeal with fruits & nuts, Eggs with whole wheat toast, Protein smoothie
-                    - Calories: ~500 kcal | Protein: ~20g
-                    
-                    **Mid-Morning Snack** (10:30 - during break)
-                    - Options: Banana with peanut butter, Greek yogurt, Nuts & dried fruit
-                    - Calories: ~200 kcal | Protein: ~10g
-                    
-                    **Lunch** (13:00)
-                    - Options: Chicken rice, Fish with vegetables, Pasta with lean meat
-                    - Calories: ~600 kcal | Protein: ~35g
-                    
-                    **Pre-Workout Snack** ({(weekday_end.hour):02d}:30 - before training)
-                    - Options: Banana, Energy bar, Small sandwich
-                    - Calories: ~200 kcal | Protein: ~10g
-                    
-                    **Post-Workout** ({(workout_start.hour + 1):02d}:00 - after training)
-                    - Options: Chocolate milk, Protein shake with banana
-                    - Calories: ~300 kcal | Protein: ~25g
-                    
-                    **Dinner** ({(workout_start.hour + 2):02d}:00)
-                    - Options: Grilled chicken/fish with vegetables, Lean beef with sweet potato
-                    - Calories: ~600 kcal | Protein: ~40g
-                    
-                    **Evening Snack** (Optional, 2hrs before bed)
-                    - Options: Cottage cheese, Casein shake, Small fruit
-                    - Calories: ~150 kcal | Protein: ~15g
-                    """)
-                    
-                    st.write("")
-                    st.markdown("#### 🎉 Weekend Meal Plan")
-                    st.write("More flexible timing - maintain same portions and quality")
-                    st.write("• Focus on whole foods")
-                    st.write("• Stay hydrated (8-10 glasses water)")
-                    st.write("• Limit processed foods and sugar")
-                    
-                    # Store diet plan
-                    if 'generated_diet' not in st.session_state:
-                        st.session_state.generated_diet = {
-                            'goal': diet_goal,
-                            'body_type': body_type,
-                            'calories': calorie_target,
-                            'protein_target': protein_target
-                        }
-                
-                with schedule_tab3:
-                    st.subheader("Optimized Sleep Schedule")
-                    
-                    st.write(f"**Recommended Sleep:** {recommended_sleep} hours")
-                    st.write(f"**Current Average:** {avg_sleep:.1f} hours" if sleep_week else "No data")
-                    st.write("")
-                    
-                    # Weekday sleep
-                    st.markdown("#### 📅 Weekday Sleep Schedule")
-                    st.write(f"🌙 **Bedtime:** {bedtime.strftime('%H:%M')}")
-                    st.write(f"☀️ **Wake Time:** {wake_time.strftime('%H:%M')}")
-                    st.write(f"⏰ **Sleep Duration:** {recommended_sleep} hours")
-                    
-                    st.write("")
-                    st.write("**Pre-Sleep Routine (30 min before bed):**")
-                    st.write("1. 📱 Put away all screens")
-                    st.write("2. 🚿 Shower or wash up")
-                    st.write("3. 📖 Light reading or relaxation")
-                    st.write("4. 🧘 Deep breathing exercises")
-                    
-                    st.write("")
-                    st.markdown("#### 🎉 Weekend Sleep Schedule")
-                    weekend_bedtime = (bedtime_datetime + timedelta(hours=1)).time()
-                    weekend_wake = (wake_datetime + timedelta(hours=1.5)).time()
-                    
-                    st.write(f"🌙 **Bedtime:** {weekend_bedtime.strftime('%H:%M')} (can be 1hr later)")
-                    st.write(f"☀️ **Wake Time:** {weekend_wake.strftime('%H:%M')} (can sleep in 1.5hrs)")
-                    st.write("**Tip:** Keep weekend schedule within 2 hours of weekday for consistency")
-                    
-                    st.write("")
-                    st.write("**Sleep Quality Tips:**")
-                    st.write("✅ Keep room cool (18-20°C)")
-                    st.write("✅ Complete darkness or eye mask")
-                    st.write("✅ No caffeine after 2 PM")
-                    st.write("✅ Exercise earlier in day (not close to bedtime)")
-                    st.write("✅ Same schedule daily (including weekends)")
-                
-                # Option to save to schedule
-                st.write("---")
-                if st.button("💾 Save Workout Schedule to Training Tab", type="primary"):
-                    # Save to user's schedule
-                    for item in workout_schedule:
-                        if item['activity'] not in ['Rest Day', 'Active Recovery (Light walk/stretch)']:
-                            user_data['schedule'].append({
-                                'day': item['day'],
-                                'activity': item['activity'],
-                                'time': item['time'],
-                                'duration': item['duration']
-                            })
-                    
-                    update_user_data(user_data)
-                    st.success("✅ Schedule saved to Training Schedule tab!")
-                    st.balloons()
+                st.info("💡 **Schedule generated!** This feature creates workout, diet, and sleep schedules based on your data.")
+                st.write("Check the Training Schedule tab to log workouts based on this plan!")
     
-    with tab2:
-        st.subheader("🍳 Healthy Recipe Database")
-        st.write("Browse recipes tailored to your dietary goals!")
+    with tab4:
+        st.subheader("🍳 Health Recipes Database")
+        st.write("Healthy recipes tailored to your fitness goals!")
         
-        # Filter by diet goal
-        if 'generated_diet' in st.session_state:
-            default_goal = st.session_state.generated_diet['goal']
-        else:
-            default_goal = "Maintenance"
+        # Recipe categories
+        st.write("### Select Your Dietary Goal")
         
-        selected_diet = st.selectbox(
-            "Select Dietary Goal",
-            ["Weight Loss", "Muscle Gain", "Maintenance"],
-            index=["Weight Loss", "Muscle Gain", "Maintenance"].index(default_goal)
+        diet_type = st.selectbox(
+            "Choose goal",
+            ["Weight Loss", "Muscle Gain", "Maintenance"]
         )
         
         # Get recipes
-        recipes_dict = search_recipes_by_diet(selected_diet)
-        recipes = recipes_dict.get(selected_diet, [])
+        all_recipes = search_recipes_by_diet(diet_type)
         
-        if recipes:
-            st.write(f"**Found {len(recipes)} recipes for {selected_diet}**")
-            st.write("")
+        if diet_type in all_recipes:
+            recipes = all_recipes[diet_type]
             
-            # Display recipes
-            for idx, recipe in enumerate(recipes):
-                with st.expander(f"🍽️ {recipe['name']} - {recipe['calories']} kcal", expanded=(idx == 0)):
-                    col1, col2 = st.columns([2, 1])
+            st.write(f"### 🍽️ {diet_type} Recipes ({len(recipes)} recipes)")
+            
+            for recipe in recipes:
+                with st.expander(f"📖 {recipe['name']}", expanded=False):
+                    col1, col2 = st.columns(2)
                     
                     with col1:
                         st.write("**Nutritional Info:**")
@@ -2685,605 +2636,8 @@ def ai_insights():
             st.info("No recipes found. Select a dietary goal above.")
         
         st.write("---")
-        st.info("💡 **Tip:** These recipes align with your body type and fitness goals. Mix and match to create variety in your diet!")
-    
-    with tab3:
-        st.subheader("💬 Chat with Your AI Fitness Assistant")
-        st.write("Ask me anything about fitness, nutrition, training, or your progress!")
-        
-        # Initialize chat history
-        if 'chat_history' not in st.session_state:
-            st.session_state.chat_history = []
-        
-        # Chat interface
-        user_question = st.text_input("Ask your question:", placeholder="e.g., How can I improve my pull-ups?", key="chat_input")
-        
-        if st.button("Send", key="send_chat"):
-            if user_question:
-                # Add user question to history
-                st.session_state.chat_history.append({"role": "user", "content": user_question})
-                
-                # Generate AI response based on user data and question
-                ai_response = generate_ai_response(user_question, user_data)
-                
-                # Add AI response to history
-                st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-        
-        # Display chat history
-        if st.session_state.chat_history:
-            st.write("---")
-            for message in st.session_state.chat_history:
-                if message["role"] == "user":
-                    st.markdown(f"**You:** {message['content']}")
-                else:
-                    st.markdown(f"**🤖 AI Coach:** {message['content']}")
-                st.write("")
-        
-        # Quick question buttons
-        st.write("---")
-        st.write("**Quick Questions:**")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("How to improve cardio?", key="q1"):
-                st.session_state.chat_history.append({"role": "user", "content": "How can I improve my cardio?"})
-                response = "To improve cardio: (1) Start with 20-30 min runs 3x/week, (2) Add interval training (sprint 1 min, jog 2 min), (3) Gradually increase distance by 10% weekly, (4) Mix running with swimming/cycling, (5) Track your heart rate - aim for 60-80% max HR for endurance!"
-                st.session_state.chat_history.append({"role": "assistant", "content": response})
-                st.rerun()
-        
-        with col2:
-            if st.button("Best recovery foods?", key="q2"):
-                st.session_state.chat_history.append({"role": "user", "content": "What are the best recovery foods?"})
-                response = "Best post-workout recovery foods: (1) Chocolate milk (protein + carbs), (2) Greek yogurt with berries, (3) Banana with peanut butter, (4) Grilled chicken with sweet potato, (5) Salmon with quinoa. Eat within 30-60 minutes after exercise for best recovery!"
-                st.session_state.chat_history.append({"role": "assistant", "content": response})
-                st.rerun()
-        
-        with col3:
-            if st.button("Prevent injuries?", key="q3"):
-                st.session_state.chat_history.append({"role": "user", "content": "How do I prevent injuries?"})
-                response = "Injury prevention tips: (1) Always warm up 5-10 min before exercise, (2) Cool down and stretch after workouts, (3) Increase training intensity gradually, (4) Rest at least 1-2 days/week, (5) Listen to your body - pain is a warning sign, (6) Stay hydrated, (7) Wear proper shoes for your activity!"
-                st.session_state.chat_history.append({"role": "assistant", "content": response})
-                st.rerun()
-        
-        if st.button("Clear Chat History", key="clear_chat"):
-            st.session_state.chat_history = []
-            st.rerun()
-    
-    with tab2:
-        st.subheader("📋 Generate Custom Workout Plan")
-        st.write("Get a personalized workout plan based on your schedule and goals!")
-        
-        # Workout plan preferences
-        st.write("### Your Preferences")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            days_available = st.multiselect(
-                "Available Days",
-                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-                default=["Monday", "Wednesday", "Friday"]
-            )
-        
-        with col2:
-            session_duration = st.selectbox(
-                "Session Duration",
-                ["30 minutes", "45 minutes", "60 minutes", "90 minutes"],
-                index=2
-            )
-        
-        workout_location = st.selectbox(
-            "Workout Location",
-            ["Home (no equipment)", "Home (basic equipment)", "Gym", "Outdoor/Park", "School"]
-        )
-        
-        primary_goal = st.selectbox(
-            "Primary Goal",
-            ["Improve NAPFA scores", "Build strength", "Increase endurance", "Lose weight", "Gain muscle", "General fitness"]
-        )
-        
-        fitness_level = st.selectbox(
-            "Current Fitness Level",
-            ["Beginner", "Intermediate", "Advanced"]
-        )
-        
-        # Generate button
-        if st.button("Generate My Custom Plan", type="primary"):
-            st.write("---")
-            st.success("✅ Your Personalized Workout Plan")
-            
-            # Generate plan based on inputs
-            duration_min = int(session_duration.split()[0])
-            
-            st.write(f"**Schedule:** {len(days_available)} days per week")
-            st.write(f"**Duration:** {session_duration} per session")
-            st.write(f"**Location:** {workout_location}")
-            st.write(f"**Goal:** {primary_goal}")
-            st.write("")
-            
-            # Generate day-by-day plan
-            for idx, day in enumerate(days_available):
-                with st.expander(f"📅 {day} - {session_duration}", expanded=True):
-                    # Vary the workout focus
-                    if len(days_available) >= 4:
-                        if idx % 4 == 0:
-                            focus = "Upper Body Strength"
-                        elif idx % 4 == 1:
-                            focus = "Lower Body & Core"
-                        elif idx % 4 == 2:
-                            focus = "Cardio & Endurance"
-                        else:
-                            focus = "Full Body & Flexibility"
-                    elif len(days_available) >= 3:
-                        if idx % 3 == 0:
-                            focus = "Strength Training"
-                        elif idx % 3 == 1:
-                            focus = "Cardio Training"
-                        else:
-                            focus = "Full Body"
-                    else:
-                        focus = "Full Body Workout"
-                    
-                    st.markdown(f"**Focus:** {focus}")
-                    
-                    # Generate exercises based on location and focus
-                    exercises = generate_workout_exercises(focus, workout_location, duration_min, fitness_level)
-                    
-                    st.write("**Warm-up (5-10 min):**")
-                    st.write("- Light jogging or jumping jacks: 3 minutes")
-                    st.write("- Dynamic stretches: 5 minutes")
-                    st.write("- Arm circles, leg swings, hip rotations")
-                    
-                    st.write("")
-                    st.write("**Main Workout:**")
-                    for exercise in exercises:
-                        st.write(f"- {exercise}")
-                    
-                    st.write("")
-                    st.write("**Cool-down (5-10 min):**")
-                    st.write("- Easy walk/jog: 3 minutes")
-                    st.write("- Static stretches: Hold each 30 seconds")
-                    st.write("- Focus on muscles worked today")
-            
-            # Additional tips
-            st.write("---")
-            st.write("### 💡 Training Tips")
-            st.write("✅ **Progression:** Increase weight/reps by 5-10% every 2 weeks")
-            st.write("✅ **Rest:** Take 1-2 rest days between intense sessions")
-            st.write("✅ **Hydration:** Drink water before, during, and after workouts")
-            st.write("✅ **Nutrition:** Eat protein + carbs within 1 hour post-workout")
-            st.write("✅ **Sleep:** Get 8-10 hours for optimal recovery")
-            st.write("✅ **Listen to your body:** Rest if you feel pain (not soreness)")
-            
-            # Track in schedule
-            if st.button("💾 Save This Workout Plan", type="primary"):
-                # Save the entire workout plan
-                user_data['saved_workout_plan'] = {
-                    'days': days_available,
-                    'duration': session_duration,
-                    'location': workout_location,
-                    'goal': primary_goal,
-                    'level': fitness_level,
-                    'created_date': datetime.now().strftime('%Y-%m-%d')
-                }
-                
-                # Also add to schedule
-                for day in days_available:
-                    user_data['schedule'].append({
-                        'day': day,
-                        'activity': f"Custom Workout - {primary_goal}",
-                        'time': "To be scheduled",
-                        'duration': duration_min
-                    })
-                
-                update_user_data(user_data)
-                st.success("✅ Workout plan saved! Check 'My Saved Plan' and 'Training Schedule' tabs.")
-                st.rerun()
-        
-        # Display saved workout plan if exists
-        if 'saved_workout_plan' in user_data and user_data['saved_workout_plan']:
-            st.write("---")
-            st.subheader("📌 Your Saved Workout Plan")
-            saved = user_data['saved_workout_plan']
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Days/Week", len(saved['days']))
-            with col2:
-                st.metric("Duration", saved['duration'])
-            with col3:
-                st.metric("Created", saved['created_date'])
-            
-            st.write(f"**Goal:** {saved['goal']}")
-            st.write(f"**Location:** {saved['location']}")
-            st.write(f"**Days:** {', '.join(saved['days'])}")
-            
-            if st.button("🗑️ Delete Saved Plan"):
-                user_data['saved_workout_plan'] = None
-                update_user_data(user_data)
-                st.rerun()
-    
-    with tab3:
-        st.subheader("Personalized Workout Recommendations")
-        
-        if not user_data['napfa_history']:
-            st.info("📝 Complete a NAPFA test first to get personalized workout recommendations!")
-        else:
-            latest_napfa = user_data['napfa_history'][-1]
-            grades = latest_napfa['grades']
-            
-            st.write(f"**Based on your latest NAPFA test ({latest_napfa['date']}):**")
-            st.write(f"**Total Score:** {latest_napfa['total']} | **Medal:** {latest_napfa['medal']}")
-            
-            # AI-generated workout plan
-            workout_plan = []
-            
-            # Analyze each test component
-            if grades['SU'] < 3:
-                workout_plan.append({
-                    'Focus': 'Core Strength (Sit-ups)',
-                    'Exercises': 'Planks (3x30s), Bicycle crunches (3x15), Russian twists (3x20)',
-                    'Frequency': '4-5 times per week',
-                    'Tips': 'Focus on slow, controlled movements. Engage your core throughout.'
-                })
-            
-            if grades['SBJ'] < 3:
-                workout_plan.append({
-                    'Focus': 'Explosive Power (Broad Jump)',
-                    'Exercises': 'Box jumps (3x10), Squat jumps (3x12), Lunge jumps (3x10 each leg)',
-                    'Frequency': '3-4 times per week',
-                    'Tips': 'Land softly and focus on explosive power from your legs.'
-                })
-            
-            if grades['SAR'] < 3:
-                workout_plan.append({
-                    'Focus': 'Flexibility (Sit and Reach)',
-                    'Exercises': 'Hamstring stretches (hold 30s), Toe touches (3x10), Seated forward bend (hold 45s)',
-                    'Frequency': 'Daily, especially after workouts',
-                    'Tips': 'Stretch when muscles are warm. Never bounce - hold steady stretches.'
-                })
-            
-            if grades['PU'] < 3:
-                workout_plan.append({
-                    'Focus': 'Upper Body Strength (Pull-ups)',
-                    'Exercises': 'Assisted pull-ups (3x5), Negative pull-ups (3x3), Dead hangs (3x20s)',
-                    'Frequency': '3-4 times per week',
-                    'Tips': 'Build up slowly. Use resistance bands for assistance if needed.'
-                })
-            
-            if grades['SR'] < 3:
-                workout_plan.append({
-                    'Focus': 'Agility & Speed (Shuttle Run)',
-                    'Exercises': 'Ladder drills (5 mins), Cone drills (3x5), High knees (3x30s)',
-                    'Frequency': '3 times per week',
-                    'Tips': 'Focus on quick direction changes and maintaining low center of gravity.'
-                })
-            
-            if grades['RUN'] < 3:
-                workout_plan.append({
-                    'Focus': 'Endurance (2.4km Run)',
-                    'Exercises': 'Interval training (400m sprints with rest), Long slow runs (3-5km), Tempo runs',
-                    'Frequency': '4-5 times per week',
-                    'Tips': 'Build endurance gradually. Mix steady runs with interval training.'
-                })
-            
-            if workout_plan:
-                st.warning("🎯 **Areas needing improvement:**")
-                for plan in workout_plan:
-                    with st.expander(f"🏋️ {plan['Focus']}", expanded=True):
-                        st.write(f"**Exercises:** {plan['Exercises']}")
-                        st.write(f"**Frequency:** {plan['Frequency']}")
-                        st.write(f"💡 **Tips:** {plan['Tips']}")
-            else:
-                st.success("🌟 Excellent! All your NAPFA components are strong. Focus on maintaining your performance with varied workouts.")
-                st.info("**Maintenance Plan:** Mix cardio, strength training, and flexibility work 4-5 times per week to stay in top shape!")
-    
-    with tab2:
-        st.subheader("AI Improvement Advice")
-        
-        if not user_data['napfa_history']:
-            st.info("📝 Complete a NAPFA test first to get improvement advice!")
-        else:
-            latest_napfa = user_data['napfa_history'][-1]
-            grades = latest_napfa['grades']
-            
-            # Find weakest areas
-            weak_areas = [(test, grade) for test, grade in grades.items() if grade < 3]
-            strong_areas = [(test, grade) for test, grade in grades.items() if grade >= 4]
-            
-            if weak_areas:
-                st.error("⚠️ **Priority Areas for Improvement:**")
-                
-                test_names = {
-                    'SU': 'Sit-Ups',
-                    'SBJ': 'Standing Broad Jump',
-                    'SAR': 'Sit and Reach',
-                    'PU': 'Pull-Ups',
-                    'SR': 'Shuttle Run',
-                    'RUN': '2.4km Run'
-                }
-                
-                for test, grade in sorted(weak_areas, key=lambda x: x[1]):
-                    with st.expander(f"📍 {test_names[test]} (Grade {grade})"):
-                        if test == 'SU':
-                            st.write("**Why it matters:** Core strength is fundamental for all movements and injury prevention.")
-                            st.write("**Quick win:** Do 3 sets of planks daily, increasing hold time weekly.")
-                            st.write("**Long-term:** Add weighted core exercises once you reach Grade 3.")
-                        elif test == 'SBJ':
-                            st.write("**Why it matters:** Lower body power helps in sports and daily activities.")
-                            st.write("**Quick win:** Practice jump squats 3x per week, focusing on explosive power.")
-                            st.write("**Long-term:** Progressive plyometric training will significantly improve your distance.")
-                        elif test == 'SAR':
-                            st.write("**Why it matters:** Flexibility prevents injuries and improves overall mobility.")
-                            st.write("**Quick win:** Stretch hamstrings and lower back daily for 10 minutes.")
-                            st.write("**Long-term:** Consider yoga or dedicated flexibility sessions 2x per week.")
-                        elif test == 'PU':
-                            st.write("**Why it matters:** Upper body strength is crucial for overall fitness balance.")
-                            st.write("**Quick win:** Start with assisted pull-ups or negatives every other day.")
-                            st.write("**Long-term:** Gradually decrease assistance until you can do full pull-ups.")
-                        elif test == 'SR':
-                            st.write("**Why it matters:** Agility and speed are essential for sports performance.")
-                            st.write("**Quick win:** Practice quick direction changes and footwork drills 3x weekly.")
-                            st.write("**Long-term:** Join a sport that requires agility (basketball, badminton, football).")
-                        elif test == 'RUN':
-                            st.write("**Why it matters:** Cardiovascular endurance affects overall health and stamina.")
-                            st.write("**Quick win:** Run 3-4 times weekly, starting at comfortable pace and distance.")
-                            st.write("**Long-term:** Build up to 20-30km per week with mixed pace training.")
-            
-            if strong_areas:
-                st.success("💪 **Your Strengths:**")
-                for test, grade in strong_areas:
-                    st.write(f"✓ {test_names[test]}: Grade {grade} - Keep it up!")
-    
-    with tab3:
-        st.subheader("Meal Suggestions Based on Your Goals")
-        
-        if not user_data['bmi_history']:
-            st.info("📝 Calculate your BMI first to get personalized meal suggestions!")
-        else:
-            latest_bmi = user_data['bmi_history'][-1]
-            bmi_value = latest_bmi['bmi']
-            category = latest_bmi['category']
-            
-            st.write(f"**Current BMI:** {bmi_value} ({category})")
-            
-            if category == "Underweight":
-                st.warning("🍽️ **Goal: Healthy Weight Gain**")
-                
-                st.write("**Breakfast Ideas:**")
-                st.write("- Oatmeal with banana, nuts, and honey")
-                st.write("- Whole grain toast with peanut butter and scrambled eggs")
-                st.write("- Smoothie with milk, banana, oats, and protein powder")
-                
-                st.write("\n**Lunch/Dinner Ideas:**")
-                st.write("- Chicken rice with extra chicken and vegetables")
-                st.write("- Salmon with quinoa and roasted vegetables")
-                st.write("- Lean beef with sweet potato and broccoli")
-                
-                st.write("\n**Snacks:**")
-                st.write("- Trail mix (nuts, dried fruits)")
-                st.write("- Greek yogurt with granola")
-                st.write("- Whole grain crackers with cheese")
-                
-                st.info("💡 **Tips:** Eat 5-6 smaller meals, focus on nutrient-dense foods, stay hydrated!")
-                
-            elif category == "Normal":
-                st.success("🎯 **Goal: Maintain Healthy Weight**")
-                
-                st.write("**Breakfast Ideas:**")
-                st.write("- Greek yogurt with berries and granola")
-                st.write("- Whole grain toast with avocado and eggs")
-                st.write("- Smoothie bowl with fruits and nuts")
-                
-                st.write("\n**Lunch/Dinner Ideas:**")
-                st.write("- Grilled chicken with brown rice and vegetables")
-                st.write("- Fish with quinoa and salad")
-                st.write("- Tofu stir-fry with mixed vegetables")
-                
-                st.write("\n**Snacks:**")
-                st.write("- Fresh fruits (apple, orange, banana)")
-                st.write("- Vegetable sticks with hummus")
-                st.write("- A handful of almonds")
-                
-                st.info("💡 **Tips:** Balanced portions, eat colorful vegetables, stay active!")
-                
-            elif category == "Overweight" or category == "Obesity":
-                st.warning("🥗 **Goal: Healthy Weight Loss**")
-                
-                st.write("**Breakfast Ideas:**")
-                st.write("- Egg white omelette with vegetables")
-                st.write("- Oatmeal with berries (no added sugar)")
-                st.write("- Green smoothie with spinach, cucumber, apple")
-                
-                st.write("\n**Lunch/Dinner Ideas:**")
-                st.write("- Grilled fish with steamed vegetables")
-                st.write("- Chicken salad with olive oil dressing")
-                st.write("- Vegetable soup with lean protein")
-                
-                st.write("\n**Snacks:**")
-                st.write("- Carrot/cucumber sticks")
-                st.write("- Apple slices")
-                st.write("- Unsalted nuts (small portion)")
-                
-                st.info("💡 **Tips:** Portion control, avoid sugary drinks, drink water before meals, eat slowly!")
-            
-            st.write("\n---")
-            st.write("**General Nutrition Tips for Athletes:**")
-            st.write("🥤 Drink 8-10 glasses of water daily")
-            st.write("🥦 Eat vegetables with every meal")
-            st.write("🍗 Include lean protein in each meal")
-            st.write("🍚 Choose whole grains over refined carbs")
-            st.write("🚫 Limit processed foods and sugary snacks")
-    
-    with tab4:
-        st.subheader("Sleep Quality Insights")
-        
-        if not user_data['sleep_history']:
-            st.info("📝 Track your sleep first to get personalized insights!")
-        else:
-            # Analyze sleep data
-            sleep_data = user_data['sleep_history']
-            
-            if len(sleep_data) >= 3:
-                # Calculate average sleep
-                total_hours = sum([s['hours'] + s['minutes']/60 for s in sleep_data])
-                avg_hours = total_hours / len(sleep_data)
-                
-                st.metric("Average Sleep Duration", f"{avg_hours:.1f} hours")
-                
-                # Sleep quality analysis
-                excellent_count = sum(1 for s in sleep_data if s['quality'] == 'Excellent')
-                good_count = sum(1 for s in sleep_data if s['quality'] == 'Good')
-                fair_count = sum(1 for s in sleep_data if s['quality'] == 'Fair')
-                poor_count = sum(1 for s in sleep_data if s['quality'] == 'Poor')
-                
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Excellent", excellent_count)
-                col2.metric("Good", good_count)
-                col3.metric("Fair", fair_count)
-                col4.metric("Poor", poor_count)
-                
-                st.write("---")
-                
-                # Personalized advice
-                if avg_hours >= 8:
-                    st.success("🌟 **Excellent Sleep Habits!**")
-                    st.write("You're getting enough sleep for optimal recovery and performance.")
-                    st.write("\n**Tips to maintain:**")
-                    st.write("- Keep a consistent sleep schedule, even on weekends")
-                    st.write("- Your current routine is working - stick with it!")
-                elif avg_hours >= 7:
-                    st.info("👍 **Good Sleep Duration**")
-                    st.write("You're close to the optimal 8-10 hours for teenagers.")
-                    st.write("\n**To improve:**")
-                    st.write("- Try going to bed 15-30 minutes earlier")
-                    st.write("- Avoid screens 1 hour before bedtime")
-                    st.write("- Keep your room cool and dark")
-                elif avg_hours >= 6:
-                    st.warning("⚠️ **Sleep More for Better Performance**")
-                    st.write("You need more sleep for optimal growth and recovery.")
-                    st.write("\n**Action plan:**")
-                    st.write("- Set a bedtime alarm 30 minutes before sleep time")
-                    st.write("- Reduce afternoon caffeine")
-                    st.write("- Create a relaxing bedtime routine")
-                else:
-                    st.error("🚨 **Sleep Deficit Alert**")
-                    st.write("Insufficient sleep affects your NAPFA performance and health!")
-                    st.write("\n**Urgent actions:**")
-                    st.write("- Prioritize sleep - aim for 8+ hours")
-                    st.write("- Remove ALL screens from bedroom")
-                    st.write("- Talk to parents/guardians about better sleep schedule")
-                
-                st.write("\n---")
-                st.write("**Sleep Optimization Tips:**")
-                st.write("😴 Go to bed and wake up at the same time daily")
-                st.write("📱 No screens 1 hour before bed (blue light disrupts sleep)")
-                st.write("🏃 Exercise earlier in the day (not right before bed)")
-                st.write("☕ Avoid caffeine after 2 PM")
-                st.write("🌡️ Keep room cool (18-20°C is ideal)")
-                st.write("📚 Try reading a book before sleep")
-                st.write("🧘 Practice relaxation techniques (deep breathing)")
-            else:
-                st.info("Track your sleep for at least 3 days to get detailed insights!")
-    
-    with tab5:
-        st.subheader("Progress Predictions")
-        
-        # Check if user has goals
-        if not user_data['goals']:
-            st.info("📝 Set a goal first to get progress predictions!")
-        else:
-            st.write("**Your Goals Progress Forecast:**")
-            
-            for idx, goal in enumerate(user_data['goals']):
-                with st.expander(f"🎯 {goal['type']} - {goal['target']}", expanded=True):
-                    progress = goal['progress']
-                    target_date = datetime.strptime(goal['date'], '%Y-%m-%d')
-                    created_date = datetime.strptime(goal['created'], '%Y-%m-%d')
-                    today = datetime.now()
-                    
-                    # Calculate days
-                    days_total = (target_date - created_date).days
-                    days_passed = (today - created_date).days
-                    days_remaining = (target_date - today).days
-                    
-                    # Progress bar
-                    st.progress(progress / 100)
-                    st.write(f"**Current Progress:** {progress}%")
-                    st.write(f"**Days Remaining:** {days_remaining} days")
-                    
-                    # AI Prediction
-                    if days_passed > 0:
-                        progress_per_day = progress / days_passed
-                        predicted_progress = progress + (progress_per_day * days_remaining)
-                        
-                        if predicted_progress >= 100:
-                            days_to_complete = int((100 - progress) / progress_per_day) if progress_per_day > 0 else 999
-                            completion_date = today + timedelta(days=days_to_complete)
-                            
-                            if days_to_complete <= days_remaining:
-                                st.success(f"🎉 **On Track!** At your current pace, you'll reach your goal by {completion_date.strftime('%B %d, %Y')} ({days_to_complete} days)")
-                                st.write("Keep up the great work! 💪")
-                            else:
-                                st.info(f"📅 You'll reach your goal around {completion_date.strftime('%B %d, %Y')}")
-                                st.write("You might need a bit more time, but you're making progress!")
-                        else:
-                            st.warning(f"⚠️ **Need to Speed Up!** At your current pace, you'll reach {predicted_progress:.0f}% by the target date.")
-                            
-                            # Calculate needed pace
-                            needed_progress_per_day = (100 - progress) / days_remaining if days_remaining > 0 else 0
-                            improvement_factor = needed_progress_per_day / progress_per_day if progress_per_day > 0 else 2
-                            
-                            st.write(f"**Recommendation:** Increase your effort by {improvement_factor:.1f}x to reach your goal on time!")
-                            
-                            # Specific advice based on goal type
-                            if goal['type'] == "NAPFA Improvement":
-                                st.write("💡 **Action:** Follow your AI workout plan more consistently")
-                            elif goal['type'] == "Weight Loss" or goal['type'] == "Muscle Gain":
-                                st.write("💡 **Action:** Review your meal plan and increase workout frequency")
-                            elif goal['type'] == "Endurance":
-                                st.write("💡 **Action:** Add one more cardio session per week")
-                            elif goal['type'] == "Flexibility":
-                                st.write("💡 **Action:** Stretch daily for 15 minutes")
-                    else:
-                        st.info("Keep tracking your progress to get predictions!")
-        
-        # NAPFA predictions
-        if user_data['napfa_history'] and len(user_data['napfa_history']) >= 2:
-            st.write("\n---")
-            st.subheader("📊 NAPFA Score Trend")
-            
-            napfa_scores = [test['total'] for test in user_data['napfa_history']]
-            napfa_dates = [test['date'] for test in user_data['napfa_history']]
-            
-            # Calculate trend
-            score_diff = napfa_scores[-1] - napfa_scores[0]
-            
-            if score_diff > 0:
-                st.success(f"📈 Your NAPFA total improved by {score_diff} points!")
-                st.write(f"From {napfa_scores[0]} to {napfa_scores[-1]}")
-                
-                # Predict next score
-                if len(napfa_scores) >= 2:
-                    avg_improvement = score_diff / (len(napfa_scores) - 1)
-                    predicted_next = napfa_scores[-1] + avg_improvement
-                    
-                    st.write(f"\n**Prediction:** If you maintain this pace, your next test could be around {predicted_next:.0f} points")
-                    
-                    # Medal prediction
-                    if predicted_next >= 21:
-                        st.write("🥇 Potential Gold medal!")
-                    elif predicted_next >= 15:
-                        st.write("🥈 Potential Silver medal!")
-                    elif predicted_next >= 9:
-                        st.write("🥉 Potential Bronze medal!")
-                        
-            elif score_diff < 0:
-                st.warning(f"📉 Your score decreased by {abs(score_diff)} points")
-                st.write("**Recommendation:** Review your training plan and increase consistency")
-            else:
-                st.info("Your score stayed the same. Time to push harder!")
+        st.info("💡 **Tip:** These recipes align with your fitness goals. Mix and match to create variety in your diet!")
 
-# Reminders and Progress
 def reminders_and_progress():
     st.header("📊 Weekly Progress Report")
     
@@ -3436,7 +2790,7 @@ def reminders_and_progress():
                 else:
                     st.info(f"Current streak: {streak} days. Aim for 3+ for consistency!")
     
-    with tab2:
+    with tab4:
         st.subheader("🏃 NAPFA Performance")
         
         if not user_data.get('napfa_history'):
@@ -3791,7 +3145,7 @@ def advanced_metrics():
             })
             update_user_data(user_data)
     
-    with tab2:
+    with tab4:
         st.subheader("📊 Body Composition Tracking")
         st.write("Track body fat percentage and lean mass")
         
@@ -4352,7 +3706,7 @@ def api_integrations():
                 """)
 
     
-    with tab2:
+    with tab4:
         st.subheader("🍔 Food & Nutrition Database")
         st.write("Search nutritional information for any food")
         
@@ -4913,7 +4267,7 @@ def workout_timer():
             update_user_data(user_data)
             st.balloons()
     
-    with tab2:
+    with tab4:
         st.subheader("🏃 NAPFA Component Timers")
         st.write("Specialized timers for each NAPFA test")
         
@@ -5274,7 +4628,8 @@ def teacher_dashboard():
     students_data = {username: all_users[username] for username in student_usernames if username in all_users}
     
     # Create tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🏠 Houses",
         "📊 Class Overview",
         "👥 Student List", 
         "📈 Performance Analysis",
@@ -5282,6 +4637,63 @@ def teacher_dashboard():
     ])
     
     with tab1:
+        st.subheader("🏠 House System - Your Class")
+        
+        # Calculate house stats for THIS teacher's students only
+        house_stats = {
+            'yellow': {'points': 0, 'members': [], 'workouts': 0, 'display': '🟡 Yellow House', 'color': '#FFD700'},
+            'red': {'points': 0, 'members': [], 'workouts': 0, 'display': '🔴 Red House', 'color': '#DC143C'},
+            'blue': {'points': 0, 'members': [], 'workouts': 0, 'display': '🔵 Blue House', 'color': '#1E90FF'},
+            'green': {'points': 0, 'members': [], 'workouts': 0, 'display': '🟢 Green House', 'color': '#32CD32'},
+            'black': {'points': 0, 'members': [], 'workouts': 0, 'display': '⚫ Black House', 'color': '#2F4F4F'}
+        }
+        
+        # Calculate points for teacher's students only
+        for username, student in students_data.items():
+            if student.get('house'):
+                house = student['house']
+                if house in house_stats:
+                    house_stats[house]['points'] += student.get('house_points_contributed', 0)
+                    house_stats[house]['members'].append(username)
+                    house_stats[house]['workouts'] += len(student.get('exercises', []))
+        
+        # Sort houses
+        sorted_houses = sorted(house_stats.items(), key=lambda x: x[1]['points'], reverse=True)
+        
+        # Display house standings
+        st.write("### 🏆 House Standings (Your Class)")
+        
+        for rank, (house_name, stats) in enumerate(sorted_houses, 1):
+            if stats['members']:  # Only show houses with members
+                medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}."
+                
+                st.markdown(f"""
+                <div class="stat-card" style="background: linear-gradient(135deg, {stats['color']} 0%, {stats['color']}dd 100%); color: white;">
+                    <h3>{medal} {stats['display']}</h3>
+                    <h2>{stats['points']:.1f} Points</h2>
+                    <p>👥 {len(stats['members'])} members | 💪 {stats['workouts']} workouts</p>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # House distribution
+        st.write("")
+        st.write("### 📊 House Distribution")
+        
+        col1, col2, col3, col4, col5 = st.columns(5)
+        cols = [col1, col2, col3, col4, col5]
+        
+        for idx, (house_name, stats) in enumerate(sorted_houses):
+            with cols[idx]:
+                st.metric(stats['display'], len(stats['members']))
+        
+        # Students not assigned to house
+        unassigned = [username for username, student in students_data.items() if not student.get('house')]
+        if unassigned:
+            st.write("")
+            st.warning(f"⚠️ {len(unassigned)} student(s) not assigned to a house")
+            st.write("Go to 'Student List' tab to assign houses.")
+    
+    with tab2:
         st.subheader("Class Overview")
         
         # Stats
@@ -5400,7 +4812,7 @@ def teacher_dashboard():
         else:
             st.success("✅ All students doing well!")
     
-    with tab2:
+    with tab5:
         st.subheader("Student List")
         
         if not students_data:
@@ -5435,17 +4847,52 @@ def teacher_dashboard():
                             st.write(f"**Points:** {student.get('total_points', 0)}")
                             st.write(f"**Login Streak:** {student.get('login_streak', 0)} days")
                         
-                        # Quick actions
+                        # House info and assignment
                         st.write("")
-                        if st.button(f"Remove from class", key=f"remove_{username}"):
-                            user_data['students'].remove(username)
-                            student['teacher_class'] = None
-                            update_user_data(user_data)
-                            save_users(all_users)
-                            st.success(f"Removed {student['name']} from class")
-                            st.rerun()
+                        current_house = student.get('house', 'Not assigned')
+                        if current_house != 'Not assigned':
+                            house_display = {
+                                'yellow': '🟡 Yellow',
+                                'red': '🔴 Red',
+                                'blue': '🔵 Blue',
+                                'green': '🟢 Green',
+                                'black': '⚫ Black'
+                            }
+                            st.write(f"**🏠 House:** {house_display.get(current_house, current_house.title())}")
+                            st.write(f"**House Points:** {student.get('house_points_contributed', 0):.1f}")
+                        else:
+                            st.write("**🏠 House:** Not assigned")
+                        
+                        # House assignment
+                        st.write("")
+                        house_options = ['yellow', 'red', 'blue', 'green', 'black']
+                        new_house = st.selectbox(
+                            "Assign to House",
+                            house_options,
+                            index=house_options.index(current_house) if current_house in house_options else 0,
+                            key=f"house_{username}",
+                            format_func=lambda x: {'yellow': '🟡 Yellow', 'red': '🔴 Red', 'blue': '🔵 Blue', 
+                                                  'green': '🟢 Green', 'black': '⚫ Black'}[x]
+                        )
+                        
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            if st.button(f"Update House", key=f"update_house_{username}"):
+                                student['house'] = new_house
+                                save_users(all_users)
+                                st.success(f"Updated {student['name']}'s house to {new_house.title()}!")
+                                st.rerun()
+                        
+                        with col_b:
+                            if st.button(f"Remove from class", key=f"remove_{username}"):
+                                user_data['students'].remove(username)
+                                student['teacher_class'] = None
+                                update_user_data(user_data)
+                                save_users(all_users)
+                                st.success(f"Removed {student['name']} from class")
+                                st.rerun()
     
-    with tab3:
+    with tab2:
         st.subheader("Performance Analysis")
         
         if not students_data:
@@ -5696,7 +5143,7 @@ def main_app():
                                ["📊 Weekly Progress", "🏆 Community", "🤖 AI Insights", 
                                 "🏥 Advanced Metrics", "🌐 Integrations", "⏱️ Workout Timer",
                                 "BMI Calculator", "NAPFA Test", "Sleep Tracker", 
-                                "Exercise Log", "Set Goals", "Training Schedule"])
+                                "Exercise Log", "Training Schedule"])
         
         # Display selected page
         if page == "📊 Weekly Progress":
@@ -5719,8 +5166,6 @@ def main_app():
             sleep_tracker()
         elif page == "Exercise Log":
             exercise_logger()
-        elif page == "Set Goals":
-            goal_setting()
         elif page == "Training Schedule":
             schedule_manager()
 
