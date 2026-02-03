@@ -5712,17 +5712,17 @@ def main_app():
         elif page == "⏱️ Workout Timer":
             workout_timer()
         elif page == "BMI Calculator":
-        bmi_calculator()
-    elif page == "NAPFA Test":
-        napfa_calculator()
-    elif page == "Sleep Tracker":
-        sleep_tracker()
-    elif page == "Exercise Log":
-        exercise_logger()
-    elif page == "Set Goals":
-        goal_setting()
-    elif page == "Training Schedule":
-        schedule_manager()
+            bmi_calculator()
+        elif page == "NAPFA Test":
+            napfa_calculator()
+        elif page == "Sleep Tracker":
+            sleep_tracker()
+        elif page == "Exercise Log":
+            exercise_logger()
+        elif page == "Set Goals":
+            goal_setting()
+        elif page == "Training Schedule":
+            schedule_manager()
 
 # Main execution
 if not st.session_state.logged_in:
